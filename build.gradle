@@ -12,12 +12,19 @@ repositories {
 
 dependencies {
     antlr 'org.antlr:antlr4:4.13.1'
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.13'
 
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.testng:testng:7.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'org.slf4j:slf4j-simple:2.0.13'
 }
 
 test {
     useJUnitPlatform()
+
+    useTestNG() {
+        useDefaultListeners = true;
+    }
 }
