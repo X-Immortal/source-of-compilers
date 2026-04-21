@@ -4,9 +4,12 @@ import org.antlr.v4.runtime.Token;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 // String: temp variables
 public class CodeGenVisitor extends ControlBaseVisitor<String> {
+  private Deque<String> breakLabels = new ArrayDeque<>();
   private final FileWriter fileWriter;
   private int tempCounter = 1;
   private int labelCounter = 1;
@@ -68,11 +71,22 @@ public class CodeGenVisitor extends ControlBaseVisitor<String> {
   @Override
   public String visitAndExpr(ControlParser.AndExprContext ctx) {
     String lhs = visit(ctx.lhs);
+
+    String trueLabel = getNewLabel("and.true");
+    String falseLabel = getNewLabel("and.false");
+    String endLabel = getNewLabel("and.end");
+    emitCode("br " + lhs + " " + trueLabel + " " + falseLabel);
+
+    emitLabel(trueLabel);
     String rhs = visit(ctx.rhs);
-
     String temp = getNewTemp();
-    emitCode(temp + " = " + " AND " + lhs + " " + rhs);
+    emitCode(temp + " = " + rhs);
+    emitCode("br " + endLabel);
 
+    emitLabel(falseLabel);
+    emitCode(temp + " = " + "false");
+
+    emitLabel(endLabel);
     return temp;
   }
 
@@ -80,11 +94,22 @@ public class CodeGenVisitor extends ControlBaseVisitor<String> {
   @Override
   public String visitOrExpr(ControlParser.OrExprContext ctx) {
     String lhs = visit(ctx.lhs);
+
+    String trueLabel = getNewLabel("or.true");
+    String falseLabel = getNewLabel("or.false");
+    String endLabel = getNewLabel("or.end");
+    emitCode("br " + lhs + " " + trueLabel + " " + falseLabel);
+
+    emitLabel(falseLabel);
     String rhs = visit(ctx.rhs);
-
     String temp = getNewTemp();
-    emitCode(temp + " = " + " OR " + lhs + " " + rhs);
+    emitCode(temp + " = " + rhs);
+    emitCode("br " + endLabel);
 
+    emitLabel(trueLabel);
+    emitCode(temp + " = " + "true");
+
+    emitLabel(endLabel);
     return temp;
   }
 
@@ -111,31 +136,79 @@ public class CodeGenVisitor extends ControlBaseVisitor<String> {
   // stat -> first = stat second = stat
   @Override
   public String visitSeqStat(ControlParser.SeqStatContext ctx) {
-    return super.visitSeqStat(ctx);
+    visit(ctx.first);
+    visit(ctx.second);
+
+    return null;
   }
 
   // stat -> if (bool) { stat }
   @Override
   public String visitIfStat(ControlParser.IfStatContext ctx) {
-    return super.visitIfStat(ctx);
+    String bool = visit(ctx.bool());
+
+    String trueLabel = getNewLabel("b.true");
+    String falseLabel = getNewLabel("b.false");
+
+    emitCode("br " + bool + " " + trueLabel + " " + falseLabel);
+
+    emitLabel(trueLabel);
+    visit(ctx.stat());
+    emitLabel(falseLabel);
+
+    return null;
   }
 
   // stat -> if (bool) { ifStat = stat } else { elseStat = stat }
   @Override
   public String visitIfElseStat(ControlParser.IfElseStatContext ctx) {
-    return super.visitIfElseStat(ctx);
+    String bool = visit(ctx.bool());
+
+    String trueLabel = getNewLabel("b.true");
+    String falseLabel = getNewLabel("b.false");
+    String endLabel = getNewLabel("b.end");
+
+    emitCode("br " + bool + " " + trueLabel + " " + falseLabel);
+
+    emitLabel(trueLabel);
+    visit(ctx.ifStat);
+    emitCode("br " + endLabel);
+
+    emitLabel(falseLabel);
+    visit(ctx.elseStat);
+    emitLabel(endLabel);
+
+    return null;
   }
 
   // stat -> while (bool) { stat }
   @Override
   public String visitWhileStat(ControlParser.WhileStatContext ctx) {
-    return super.visitWhileStat(ctx);
+    String beginLabel = getNewLabel("begin");
+    emitLabel(beginLabel);
+
+    String bool = visit(ctx.bool());
+
+    String trueLabel = getNewLabel("b.true");
+    String falseLabel = getNewLabel("b.false");
+    emitCode("br " + bool + " " + trueLabel + " " + falseLabel);
+
+    emitLabel(trueLabel);
+    breakLabels.push(falseLabel);
+    visit(ctx.stat());
+    breakLabels.pop();
+    emitCode("br " + beginLabel);
+
+    emitLabel(falseLabel);
+
+    return null;
   }
 
   // stat -> break
   @Override
   public String visitBreakStat(ControlParser.BreakStatContext ctx) {
-    return super.visitBreakStat(ctx);
+    emitCode("br " + breakLabels.peek());
+    return null;
   }
 
   private void emitLabel(String label) {
